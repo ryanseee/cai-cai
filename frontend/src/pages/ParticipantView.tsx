@@ -190,6 +190,17 @@ const ParticipantView: React.FC = () => {
           </div>
         </div> */}
 
+        <div className="flex justify-end mb-8">
+          <Button
+            variant="outline"
+            onClick={() => setShowExitConfirmation(true)}
+            icon={<LogOut size={18} />}
+            className="border-red-200 text-red-600 hover:bg-red-50"
+          >
+            Exit Session
+          </Button>
+        </div>
+
         <Card className="my-6 text-center">
           <h2 className="text-xl font-semibold mb-2">
             Welcome, {currentParticipant.name}!
@@ -224,17 +235,6 @@ const ParticipantView: React.FC = () => {
             </div>
           )}
         </Card>
-
-        <div className="flex justify-end mb-8">
-          <Button
-            variant="outline"
-            onClick={() => setShowExitConfirmation(true)}
-            icon={<LogOut size={18} />}
-            className="border-red-200 text-red-600 hover:bg-red-50"
-          >
-            Exit Session
-          </Button>
-        </div>
 
         {showPhoto && assignedPhoto && (
           <div className="mt-8 transition-all duration-500 ease-in-out transform scale-100">
