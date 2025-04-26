@@ -3,10 +3,18 @@ import { useSession } from "../context/SessionContext";
 import { Photo } from "../types";
 import Button from "./Button";
 import { Upload, X } from "lucide-react";
+import imageCompression from "browser-image-compression";
 
 interface PhotoUploaderProps {
   onUploadComplete: () => void;
 }
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const COMPRESSION_OPTIONS = {
+  maxSizeMB: 1,
+  maxWidthOrHeight: 1920,
+  useWebWorker: true,
+};
 
 export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
   onUploadComplete,
@@ -15,37 +23,58 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("handleFileChange called");
-    if (!e.target.files) {
-      console.log("No files selected");
-      return;
+  const validateFile = (file: File) => {
+    if (file.size > MAX_FILE_SIZE) {
+      throw new Error(`File ${file.name} is too large. Maximum size is 10MB`);
     }
+    if (!file.type.startsWith("image/")) {
+      throw new Error(`File ${file.name} is not an image`);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
 
     const files = Array.from(e.target.files);
-    console.log("Files selected:", files.length);
+    const validFiles: File[] = [];
+    const errors: string[] = [];
 
-    // Append new files instead of replacing
-    setSelectedFiles((prev) => [...prev, ...files]);
+    // Validate files first
+    for (const file of files) {
+      try {
+        validateFile(file);
+        validFiles.push(file);
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : "Invalid file");
+      }
+    }
 
-    // Generate previews for new files
-    files.forEach((file) => {
-      console.log("Processing file:", file.name);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        console.log("Preview generated for:", file.name);
-        setPreviews((prev) => {
-          const newPreviews = [...prev, reader.result as string];
-          console.log("Total previews after update:", newPreviews.length);
-          return newPreviews;
-        });
-      };
-      reader.readAsDataURL(file);
-    });
+    if (errors.length > 0) {
+      alert(`Some files were not added:\n${errors.join("\n")}`);
+    }
 
-    // Reset the file input to allow selecting the same file again
+    if (validFiles.length === 0) return;
+
+    // Add valid files to state
+    setSelectedFiles((prev) => [...prev, ...validFiles]);
+
+    // Generate previews for valid files
+    for (const file of validFiles) {
+      try {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPreviews((prev) => [...prev, reader.result as string]);
+        };
+        reader.readAsDataURL(file);
+      } catch (error) {
+        console.error("Error generating preview:", error);
+      }
+    }
+
+    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -60,54 +89,58 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
     if (selectedFiles.length === 0 || !currentSession) return;
 
     setIsUploading(true);
+    setUploadProgress(0);
 
     try {
       const photos: Photo[] = [];
+      const totalFiles = selectedFiles.length;
 
-      // Process each file
-      for (let i = 0; i < selectedFiles.length; i++) {
+      // Process files sequentially
+      for (let i = 0; i < totalFiles; i++) {
         const file = selectedFiles[i];
-        const reader = new FileReader();
+        try {
+          // Compress the image
+          const compressedFile = await imageCompression(
+            file,
+            COMPRESSION_OPTIONS
+          );
 
-        // Create a promise to handle the async file reading
-        const filePromise = new Promise<Photo>((resolve) => {
-          reader.onload = (e) => {
-            if (e.target?.result) {
-              resolve({
-                url: e.target.result as string,
-                title: file.name,
-                session_id: currentSession.id,
-                uploaded_at: new Date().toISOString(),
-              });
-            }
-          };
-          reader.readAsDataURL(file);
-        });
+          // Convert to base64
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(compressedFile);
+          });
 
-        // Wait for the file to be read
-        const photo = await filePromise;
-        photos.push(photo);
+          photos.push({
+            url: base64,
+            title: file.name,
+            session_id: currentSession.id,
+            uploaded_at: new Date().toISOString(),
+          });
+
+          // Update progress
+          setUploadProgress(((i + 1) / totalFiles) * 100);
+        } catch (error) {
+          console.error(`Error processing file ${file.name}:`, error);
+          throw new Error(`Failed to process ${file.name}`);
+        }
       }
 
-      // Upload all photos
-      console.log("Uploading photos to server:", photos.length);
+      // Upload all processed photos
       await uploadPhotos(photos);
-      console.log("Photos uploaded successfully");
-
-      // Call the onUploadComplete callback
       onUploadComplete();
 
-      // Clear the selected files and previews
+      // Clear state
       setSelectedFiles([]);
       setPreviews([]);
-
-      // Reset the file input
+      setUploadProgress(0);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     } catch (error) {
       console.error("Error uploading photos:", error);
-      alert("Failed to upload photos. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to upload photos");
     } finally {
       setIsUploading(false);
     }
@@ -133,14 +166,13 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
 
         <div
           onClick={openFileDialog}
-          className={`border-2 border-dashed rounded-lg p-8 w-full text-center transition-colors
-            ${"border-gray-300 cursor-pointer hover:border-indigo-500"}`}
+          className="border-2 border-dashed rounded-lg p-8 w-full text-center transition-colors border-gray-300 cursor-pointer hover:border-indigo-500"
         >
-          <Upload className={`mx-auto h-12 w-12 text-gray-400`} />
-          <p className={`mt-1 text-sm text-gray-600`}>
+          <Upload className="mx-auto h-12 w-12 text-gray-400" />
+          <p className="mt-1 text-sm text-gray-600">
             Click to upload photos, or drag and drop
           </p>
-          <p className={`text-xs text-gray-500`}>PNG, JPG, GIF up to 10MB</p>
+          <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
         </div>
 
         {previews.length > 0 && (
@@ -150,12 +182,11 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
                 <img
                   src={preview}
                   alt={`Preview ${index}`}
-                  className={`h-32 w-full object-cover rounded-lg shadow-sm`}
+                  className="h-32 w-full object-cover rounded-lg shadow-sm"
                 />
                 <button
                   onClick={() => removeFile(index)}
-                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1
-                            opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <X size={16} />
                 </button>
@@ -165,16 +196,31 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
         )}
 
         {selectedFiles.length > 0 && (
-          <Button
-            onClick={handleUpload}
-            disabled={isUploading}
-            className="mt-4"
-            icon={<Upload size={18} />}
-          >
-            {isUploading
-              ? "Uploading..."
-              : `Upload ${selectedFiles.length} photos`}
-          </Button>
+          <div className="mt-4 w-full">
+            {isUploading && (
+              <div className="mb-4">
+                <div className="h-2 w-full bg-gray-200 rounded-full">
+                  <div
+                    className="h-2 bg-indigo-500 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+                <p className="text-sm text-gray-600 mt-1 text-center">
+                  Processing photos... {Math.round(uploadProgress)}%
+                </p>
+              </div>
+            )}
+            <Button
+              onClick={handleUpload}
+              disabled={isUploading}
+              icon={<Upload size={18} />}
+              className="w-full"
+            >
+              {isUploading
+                ? "Uploading..."
+                : `Upload ${selectedFiles.length} photos`}
+            </Button>
+          </div>
         )}
       </div>
     </div>

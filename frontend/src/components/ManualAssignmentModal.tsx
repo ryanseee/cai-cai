@@ -35,7 +35,7 @@ interface ManualAssignmentModalProps {
   onClose: () => void;
   participants: Participant[];
   photos: Photo[];
-  onAssign: (participantId: string, photoId: string) => void;
+  onAssign: (participantId: string, photoId: string | null) => void;
 }
 
 const ManualAssignmentModal: React.FC<ManualAssignmentModalProps> = ({
@@ -45,6 +45,7 @@ const ManualAssignmentModal: React.FC<ManualAssignmentModalProps> = ({
   photos,
   onAssign,
 }) => {
+  // Initialize tempAssignments with existing assignments
   const [tempAssignments, setTempAssignments] = useState<
     Record<string, string>
   >({});
@@ -52,14 +53,28 @@ const ManualAssignmentModal: React.FC<ManualAssignmentModalProps> = ({
     null
   );
 
+  // Reset state and initialize with existing assignments when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      const existingAssignments = participants.reduce((acc, participant) => {
+        if (participant.photo_assigned) {
+          acc[participant.id] = participant.photo_assigned;
+        }
+        return acc;
+      }, {} as Record<string, string>);
+
+      setTempAssignments(existingAssignments);
+      setSelectedParticipant(null);
+    }
+  }, [isOpen, participants]);
+
   const handleParticipantClick = (participantId: string) => {
     if (selectedParticipant === participantId) {
-      // If clicking the same participant again, unassign their photo
-      setTempAssignments((prev) => {
-        const newAssignments = { ...prev };
-        delete newAssignments[participantId];
-        return newAssignments;
-      });
+      // If clicking the same participant again, mark for unassignment
+      setTempAssignments((prev) => ({
+        ...prev,
+        [participantId]: "", // Empty string means unassign
+      }));
       setSelectedParticipant(null);
     } else {
       setSelectedParticipant(participantId);
@@ -78,22 +93,44 @@ const ManualAssignmentModal: React.FC<ManualAssignmentModalProps> = ({
 
   const handleConfirm = () => {
     Object.entries(tempAssignments).forEach(([participantId, photoId]) => {
-      if (photoId) {
-        onAssign(participantId, photoId);
-      }
+      // Empty string means unassign, convert to null
+      onAssign(participantId, photoId === "" ? null : photoId);
     });
     onClose();
   };
 
   const getAssignedPhoto = (participantId: string) => {
-    const photoId = tempAssignments[participantId];
-    return photos.find((photo) => photo.id === photoId);
+    // If there's a temp assignment (including empty string for unassign), use that
+    if (participantId in tempAssignments) {
+      const photoId = tempAssignments[participantId];
+      return photoId ? photos.find((photo) => photo.id === photoId) : null;
+    }
+    // Otherwise use existing assignment
+    const existingPhotoId = participants.find(
+      (p) => p.id === participantId
+    )?.photo_assigned;
+    return existingPhotoId
+      ? photos.find((photo) => photo.id === existingPhotoId)
+      : null;
   };
 
   const getAvailablePhotos = () => {
-    const assignedPhotoIds = Object.values(tempAssignments);
+    // Get all currently assigned photo IDs
+    const assignedPhotoIds = new Set(
+      participants
+        .map((p) => {
+          // If participant has a temp assignment, use that
+          if (p.id in tempAssignments) {
+            return tempAssignments[p.id];
+          }
+          // Otherwise use their existing assignment
+          return p.photo_assigned;
+        })
+        .filter(Boolean) // Remove empty strings and nulls
+    );
+
     return photos.filter(
-      (photo) => photo.id && !assignedPhotoIds.includes(photo.id)
+      (photo) => photo.id && !assignedPhotoIds.has(photo.id)
     );
   };
 
@@ -105,39 +142,43 @@ const ManualAssignmentModal: React.FC<ManualAssignmentModalProps> = ({
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-gray-700">Participants</h3>
             <div className="space-y-2">
-              {participants.map((participant) => (
-                <div
-                  key={participant.id}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                    selectedParticipant === participant.id
-                      ? getAssignedPhoto(participant.id)
-                        ? "border-red-500 bg-red-50"
-                        : "border-indigo-500 bg-indigo-50"
-                      : "border-gray-200 hover:border-indigo-300"
-                  }`}
-                  onClick={() => handleParticipantClick(participant.id)}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
-                      {getAssignedPhoto(participant.id) && (
-                        <img
-                          src={getAssignedPhoto(participant.id)?.url}
-                          alt={participant.name}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {participant.name}
-                      </p>
-                      {getAssignedPhoto(participant.id) && (
-                        <p className="text-sm text-gray-500">Photo assigned</p>
-                      )}
+              {[...participants]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((participant) => (
+                  <div
+                    key={participant.id}
+                    className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                      selectedParticipant === participant.id
+                        ? getAssignedPhoto(participant.id)
+                          ? "border-red-500 bg-red-50"
+                          : "border-indigo-500 bg-indigo-50"
+                        : "border-gray-200 hover:border-indigo-300"
+                    }`}
+                    onClick={() => handleParticipantClick(participant.id)}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
+                        {getAssignedPhoto(participant.id) && (
+                          <img
+                            src={getAssignedPhoto(participant.id)?.url}
+                            alt={participant.name}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {participant.name}
+                        </p>
+                        {getAssignedPhoto(participant.id) && (
+                          <p className="text-sm text-gray-500">
+                            Photo assigned
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
 

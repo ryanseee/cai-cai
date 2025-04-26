@@ -132,14 +132,26 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleManualAssign = (participantId: string, photoId: string) => {
+  const handleManualAssign = (
+    participantId: string,
+    photoId: string | null
+  ) => {
     if (!currentSession) return;
 
-    socket.emit("assign_photo_manually", {
-      sessionId: currentSession.id,
-      participantId,
-      photoId,
-    });
+    if (photoId === null) {
+      // Use unassign_photo event for unassignment
+      socket.emit("unassign_photo", {
+        sessionId: currentSession.id,
+        participantId,
+      });
+    } else {
+      // Use assign_photo_manually event for assignment
+      socket.emit("assign_photo_manually", {
+        sessionId: currentSession.id,
+        participantId,
+        photoId,
+      });
+    }
   };
 
   const handleManualUnassign = (participantId: string) => {
@@ -280,7 +292,6 @@ const AdminDashboard: React.FC = () => {
           participants={participants}
           photos={photos}
           onAssign={handleManualAssign}
-          onUnassign={handleManualUnassign}
         />
       </div>
     </Layout>
