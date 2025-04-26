@@ -11,9 +11,10 @@ interface PhotoUploaderProps {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const COMPRESSION_OPTIONS = {
-  maxSizeMB: 1,
-  maxWidthOrHeight: 1920,
+  maxSizeMB: 0.2, // Reduce max size to 200KB per image
+  maxWidthOrHeight: 1280, // Reduce max dimension to 1280px
   useWebWorker: true,
+  initialQuality: 0.5, // Start with lower quality
 };
 
 export const PhotoUploader: React.FC<PhotoUploaderProps> = ({

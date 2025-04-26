@@ -177,14 +177,7 @@ const ParticipantView: React.FC = () => {
   return (
     <Layout title={currentSession?.name || "Session"}>
       <div className="max-w-lg mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-8">
-          <div>
-            <h1 className="text-3xl font-light text-gray-800 mb-2">
-              {currentSession?.name || "Session"}
-            </h1>
-            <p className="text-gray-500">Participant View</p>
-          </div>
-
+        {/* <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-8">
           <div className="flex flex-wrap gap-3">
             <Button
               variant="outline"
@@ -195,7 +188,7 @@ const ParticipantView: React.FC = () => {
               Exit Session
             </Button>
           </div>
-        </div>
+        </div> */}
 
         <Card className="my-6 text-center">
           <h2 className="text-xl font-semibold mb-2">
@@ -231,6 +224,17 @@ const ParticipantView: React.FC = () => {
             </div>
           )}
         </Card>
+
+        <div className="flex justify-end mb-8">
+          <Button
+            variant="outline"
+            onClick={() => setShowExitConfirmation(true)}
+            icon={<LogOut size={18} />}
+            className="border-red-200 text-red-600 hover:bg-red-50"
+          >
+            Exit Session
+          </Button>
+        </div>
 
         {showPhoto && assignedPhoto && (
           <div className="mt-8 transition-all duration-500 ease-in-out transform scale-100">
