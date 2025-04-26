@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import Card from './Card';
-import Button from './Button';
-import { Copy, Check } from 'lucide-react';
+import React, { useState } from "react";
+import Card from "./Card";
+import Button from "./Button";
+import { Copy, Check } from "lucide-react";
 
 interface SessionCodeProps {
   code: string;
@@ -11,9 +11,23 @@ const SessionCode: React.FC<SessionCodeProps> = ({ code }) => {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(code);
+    // Create a temporary input element
+    const tempInput = document.createElement("input");
+    tempInput.value = code;
+    tempInput.style.position = "fixed";
+    tempInput.style.opacity = "0";
+    document.body.appendChild(tempInput);
+
+    // Select and copy the text
+    tempInput.select();
+    tempInput.setSelectionRange(0, 99999); // For mobile devices
+    document.execCommand("copy");
+
+    // Clean up
+    document.body.removeChild(tempInput);
+
+    // Show feedback
     setCopied(true);
-    
     setTimeout(() => {
       setCopied(false);
     }, 2000);
@@ -31,14 +45,14 @@ const SessionCode: React.FC<SessionCodeProps> = ({ code }) => {
             Share this code with participants to join
           </p>
         </div>
-        
+
         <Button
           variant="outline"
           size="sm"
           onClick={copyToClipboard}
           icon={copied ? <Check size={16} /> : <Copy size={16} />}
         >
-          {copied ? 'Copied!' : 'Copy Code'}
+          {copied ? "Copied!" : "Copy Code"}
         </Button>
       </div>
     </Card>

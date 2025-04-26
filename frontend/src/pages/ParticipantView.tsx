@@ -42,8 +42,9 @@ const ParticipantView: React.FC = () => {
   // Reset showPhoto when photo assignment changes
   useEffect(() => {
     if (currentParticipant?.photo_assigned) {
-      setShowPhoto(false);
-      setShowConfetti(false);
+      setShowPhoto(true);
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 3000);
     }
   }, [currentParticipant?.photo_assigned]);
 
@@ -206,7 +207,9 @@ const ParticipantView: React.FC = () => {
               : "Waiting for the admin to assign photos..."}
           </p>
 
-          {currentParticipant.photo_assigned && !showPhoto && (
+          {currentParticipant.photo_assigned &&
+            !showPhoto &&
+            /* Commented out for future use
             <Button
               onClick={handleRevealPhoto}
               icon={<Camera size={18} />}
@@ -214,7 +217,8 @@ const ParticipantView: React.FC = () => {
             >
               Reveal Your Photo
             </Button>
-          )}
+            */
+            null}
 
           {!currentParticipant.photo_assigned && (
             <div className="flex items-center justify-center h-48 bg-gray-100 rounded-lg mb-4">
