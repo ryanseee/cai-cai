@@ -218,11 +218,11 @@ io.on("connection", (socket) => {
         } else {
           await db.addParticipant(session.id, name, socket.id);
         }
-
-        // Notify all clients about updated participants
-        const updatedParticipants = await db.getParticipants(session.id);
-        io.in(code).emit("participants_updated", updatedParticipants);
       }
+
+      // Get updated participants list and notify all clients
+      const updatedParticipants = await db.getParticipants(session.id);
+      io.in(code).emit("participants_updated", updatedParticipants);
 
       // Send session data and photos to the client
       socket.emit("session_joined", session);

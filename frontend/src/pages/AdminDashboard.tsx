@@ -25,17 +25,24 @@ const AdminDashboard: React.FC = () => {
     endSession,
     isAdmin,
     socket,
+    joinSession,
+    setIsAdmin,
   } = useSession();
 
   const [sessionName, setSessionName] = useState("");
   const [creatingSession, setCreatingSession] = useState(!currentSession);
-  const [error, setError] = useState<string | undefined>(undefined);
+  const [createError, setCreateError] = useState<string | undefined>(undefined);
+  const [recoverError, setRecoverError] = useState<string | undefined>(
+    undefined
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
   const [assignmentMode, setAssignmentMode] = useState<"auto" | "manual">(
     "auto"
   );
   const [isManualAssignmentOpen, setIsManualAssignmentOpen] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
 
   useEffect(() => {
     // If not admin and we have a session, redirect to participant view
@@ -52,12 +59,12 @@ const AdminDashboard: React.FC = () => {
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(undefined);
+    setCreateError(undefined);
 
     // Validate session name
     const validation = validateSessionName(sessionName);
     if (!validation.isValid) {
-      setError(validation.error);
+      setCreateError(validation.error);
       return;
     }
 
@@ -69,7 +76,7 @@ const AdminDashboard: React.FC = () => {
       }
       setCreatingSession(false);
     } catch (error) {
-      setError(
+      setCreateError(
         error instanceof Error ? error.message : "Failed to create session"
       );
     } finally {
@@ -94,7 +101,7 @@ const AdminDashboard: React.FC = () => {
       await endSession();
       navigate("/");
     } catch (error) {
-      setError("Failed to end session");
+      setCreateError("Failed to end session");
     }
   };
 
@@ -106,7 +113,7 @@ const AdminDashboard: React.FC = () => {
       await navigator.clipboard.writeText(url);
       alert("Join link copied to clipboard!");
     } catch (error) {
-      setError("Failed to copy link to clipboard");
+      setCreateError("Failed to copy link to clipboard");
     }
   };
 
@@ -163,6 +170,35 @@ const AdminDashboard: React.FC = () => {
     });
   };
 
+  const handleRecoverSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoverError(undefined);
+
+    if (!recoveryCode || recoveryCode.length !== 6) {
+      setRecoverError("Please enter a valid 6-digit session code");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Set isAdmin to true before joining
+      setIsAdmin(true);
+
+      // Try to join the session as admin
+      const result = await joinSession(recoveryCode, "Admin", true);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to recover session");
+      }
+      // If successful, the socket event will handle the navigation
+    } catch (error) {
+      setRecoverError(
+        error instanceof Error ? error.message : "Failed to recover session"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (creatingSession) {
     return (
       <Layout title="Create New Session" showBack={true}>
@@ -180,7 +216,7 @@ const AdminDashboard: React.FC = () => {
                 placeholder="e.g., Team Building Game"
                 required
                 autoFocus
-                error={error}
+                error={createError}
                 disabled={isLoading}
                 className="bg-white/50"
               />
@@ -193,8 +229,66 @@ const AdminDashboard: React.FC = () => {
               >
                 {isLoading ? "Creating..." : "Create Session"}
               </Button>
+
+              <div className="mt-6 pt-6 border-t">
+                <p className="text-gray-600 text-center">
+                  Already have a session?{" "}
+                  <button
+                    type="button"
+                    onClick={() => setShowRecovery(true)}
+                    className="text-indigo-600 hover:text-indigo-800"
+                  >
+                    Click here to recover
+                  </button>
+                </p>
+              </div>
             </form>
           </Card>
+
+          {showRecovery && (
+            <Card className="my-12 p-8 glass-card">
+              <form onSubmit={handleRecoverSession} className="space-y-6">
+                <h2 className="text-2xl font-light text-gray-800">
+                  Recover Admin Session
+                </h2>
+
+                <Input
+                  label="Session Code"
+                  value={recoveryCode}
+                  onChange={(e) =>
+                    setRecoveryCode(e.target.value.toUpperCase())
+                  }
+                  placeholder="Enter 6-digit code"
+                  error={recoverError}
+                  disabled={isLoading}
+                  className="bg-white/50"
+                />
+
+                <Button
+                  type="submit"
+                  fullWidth
+                  disabled={
+                    !recoveryCode || recoveryCode.length !== 6 || isLoading
+                  }
+                  className="bg-indigo-500 hover:bg-indigo-600 text-white"
+                >
+                  {isLoading ? "Recovering..." : "Recover Session"}
+                </Button>
+
+                <div className="mt-6 pt-6 border-t">
+                  <p className="text-gray-600 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowRecovery(false)}
+                      className="text-indigo-600 hover:text-indigo-800"
+                    >
+                      Back to Create Session
+                    </button>
+                  </p>
+                </div>
+              </form>
+            </Card>
+          )}
         </div>
       </Layout>
     );

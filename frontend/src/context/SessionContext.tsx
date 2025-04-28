@@ -19,7 +19,8 @@ interface SessionContextProps {
   createSession: (name: string) => Promise<string>;
   joinSession: (
     code: string,
-    name: string
+    name: string,
+    isAdmin: boolean
   ) => Promise<{ success: boolean; error?: string }>;
   addParticipant: (participant: Participant) => Promise<void>;
   uploadPhotos: (photos: Photo[]) => Promise<void>;
@@ -110,7 +111,15 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       newSocket.on("session_joined", (session: Session) => {
         console.log("session_joined event received:", session);
         setCurrentSession(session);
-        navigate(`/participant/${session.code}`);
+
+        // If admin, fetch participants and navigate to admin dashboard
+        if (isAdmin) {
+          // Emit get_participants event to fetch the list
+          socketRef.current?.emit("get_participants", { code: session.code });
+          navigate("/admin");
+        } else {
+          navigate(`/participant/${session.code}`);
+        }
       });
 
       newSocket.on("session_ended", () => {
@@ -126,14 +135,29 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
         socketRef.current = null;
       }
     };
+  }, []); // Remove isAdmin and navigate from dependencies
+
+  // Add cleanup effect for session state
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      clearSession();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      clearSession();
+    };
   }, []);
 
   const joinSession = async (
     code: string,
-    name: string
+    name: string,
+    isAdmin: boolean = false
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log("joinSession called with:", { code, name });
+      console.log("joinSession called with:", { code, name, isAdmin });
       if (!socketRef.current) {
         console.error("Socket not initialized");
         throw new Error("Socket not initialized");
@@ -165,7 +189,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       socketRef.current.emit("join_session", {
         code,
         name,
-        isAdmin: false,
+        isAdmin,
       });
 
       // Store the name in localStorage
@@ -215,11 +239,16 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
       setIsAdmin(true);
       localStorage.setItem("participantName", name);
 
+      // Join the session as admin
       socketRef.current.emit("join_session", {
         code: session.code,
         name: name,
         isAdmin: true,
       });
+
+      // Fetch initial participants list
+      socketRef.current.emit("get_participants", { code: session.code });
+
       return session.code;
     } catch (error) {
       console.error("Error creating session:", error);
@@ -228,10 +257,12 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const clearSession = async () => {
+    console.log("Clearing session state");
     setCurrentSession(null);
     setParticipants([]);
     setPhotos([]);
     setIsAdmin(false);
+    setIsSessionEnded(false);
     localStorage.removeItem("participantName");
   };
 

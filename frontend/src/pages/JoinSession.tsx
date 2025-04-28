@@ -78,7 +78,7 @@ const JoinSession: React.FC = () => {
 
     try {
       console.log("Attempting to join session:", { name, sessionCode });
-      const result = await joinSession(sessionCode.trim(), name.trim());
+      const result = await joinSession(sessionCode.trim(), name.trim(), false);
       console.log("Join session result:", result);
 
       if (!result.success) {
@@ -97,7 +97,7 @@ const JoinSession: React.FC = () => {
 
   // Add a timeout to reset loading state if navigation doesn't happen
   useEffect(() => {
-    let timeoutId: number;
+    let timeoutId: NodeJS.Timeout;
     if (isLoading) {
       timeoutId = setTimeout(() => {
         setIsLoading(false);
